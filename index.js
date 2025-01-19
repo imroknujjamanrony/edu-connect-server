@@ -1,10 +1,9 @@
 
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
 
@@ -51,6 +50,39 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    //all the collection of database
+    const db=client.db('EduConnect')
+    const userCollection=db.collection('users')
+    const classesCollection=db.collection('classes')
+    
+    
+    //save a user 
+    app.post('/users/:email',async(req,res)=>{
+      const email=req.params.email
+      const query={email}
+      const user=req.body
+      //check if user is already in db or not 
+      isExist=await userCollection.findOne(query)
+      if(isExist){
+        return res.send(isExist)
+      }
+      const result=await userCollection.insertOne({...user,
+        role: "Student",
+        timestamp: Date.now()})
+      res.send(result)
+    })
+
+
+    //send classes to db
+    app.post('/classes',async(req,res)=>{
+      const classs=req.body
+      const result=await classesCollection.insertOne(classs)
+      res.send(result)
+    })
+
+
+
+
     // JWT Token Creation
     app.post('/jwt', async (req, res) => {
       try {
