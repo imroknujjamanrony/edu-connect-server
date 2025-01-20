@@ -87,6 +87,55 @@ async function run() {
       res.send(result)
     })
 
+    //delete class
+    app.delete('/class/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await classesCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount > 0) {
+          res.status(200).json({ message: 'Class deleted successfully' });
+        } else {
+          res.status(404).json({ message: 'Class not found' });
+        }
+      } catch (error) {
+        res.status(500).json({ message: 'Failed to delete class', error });
+      }
+    });
+
+   // Update class by ID
+app.put('/class/:id', async (req, res) => {
+  const { id } = req.params;
+  const { title, price, description, image } = req.body;
+
+  try {
+    console.log('rcv id',id);
+    const objectId = new ObjectId(id);
+    console.log("Converted ObjectId:", objectId); 
+    // Update the class in the collection using the provided ID
+    const updatedClass = await classesCollection.findOneAndUpdate(
+      { _id: new ObjectId(id) }, // Convert string ID to ObjectId
+      { $set: { title, price, description, image } }, // Set the updated fields
+      { returnDocument: 'after' } // Return the updated document
+    );
+
+    // If the class is not found, return a 404 response
+    if (!updatedClass.value) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    // Send the updated class back in the response
+    res.status(200).json({
+      message: 'Class updated successfully',
+      data: updatedClass.value,
+    });
+  } catch (error) {
+    // Handle errors
+    res.status(500).json({ message: 'Error updating class', error });
+  }
+});
+
+    
+
 //get all classes public route
     app.get('/allClasses',async(req,res)=>{
      
