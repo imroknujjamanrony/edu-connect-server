@@ -74,11 +74,43 @@ async function run() {
 
 
     //send classes to db
-    app.post('/classes',async(req,res)=>{
+    app.post('/class',async(req,res)=>{
       const classs=req.body
-      const result=await classesCollection.insertOne(classs)
+      const result=await classesCollection.insertOne({...classs,status:'Pending'})
       res.send(result)
     })
+
+    //get My all classes
+    app.get('/myClasses',async(req,res)=>{
+     
+      const result=await classesCollection.find().toArray()
+      res.send(result)
+    })
+
+//get all classes public route
+    app.get('/allClasses',async(req,res)=>{
+     
+      const result=await classesCollection.find().toArray()
+      res.send(result)
+    })
+
+
+    //get single class details by id
+    app.get('/class/:id', async (req, res) => {
+      const { id } = req.params;
+      try {
+        const result = await classesCollection.findOne({ _id: new ObjectId(id) });
+        if (result) {
+          res.send(result);
+        } else {
+          res.status(404).send({ message: 'Class not found' });
+        }
+      } catch (error) {
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+    
+
 
 
 
