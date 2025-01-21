@@ -72,6 +72,26 @@ async function run() {
       res.send(result)
     })
 
+    //get all the users
+    app.get('/users',async(req,res)=>{
+     
+      const result=await userCollection.find().toArray()
+      res.send(result)
+    })
+
+    //make a user admin
+    app.patch('/users/admin/:id',async(req,res)=>{
+      const id =req.params.id;
+      const filter={_id: new ObjectId(id)};
+      const updateDoc={
+        $set:{
+          role:'admin'
+        }
+      }
+      const result=await userCollection.updateOne(filter,updateDoc)
+      res.send(result)
+    })
+
 
     //send classes to db
     app.post('/class',async(req,res)=>{
@@ -102,39 +122,33 @@ async function run() {
       }
     });
 
-   // Update class by ID
+
+// Update a specific class by ID
 app.put('/class/:id', async (req, res) => {
   const { id } = req.params;
-  const { title, price, description, image } = req.body;
+  const updatedClassData = req.body;
 
   try {
-    console.log('rcv id',id);
-    const objectId = new ObjectId(id);
-    console.log("Converted ObjectId:", objectId); 
-    // Update the class in the collection using the provided ID
-    const updatedClass = await classesCollection.findOneAndUpdate(
-      { _id: new ObjectId(id) }, // Convert string ID to ObjectId
-      { $set: { title, price, description, image } }, // Set the updated fields
-      { returnDocument: 'after' } // Return the updated document
+    const result = await classesCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updatedClassData }
     );
 
-    // If the class is not found, return a 404 response
-    if (!updatedClass.value) {
-      return res.status(404).json({ message: 'Class not found' });
+    if (result.modifiedCount > 0) {
+      res.status(200).send({ message: 'Class updated successfully' });
+    } else {
+      res.status(404).send({ message: 'Class not found or no changes made' });
     }
-
-    // Send the updated class back in the response
-    res.status(200).json({
-      message: 'Class updated successfully',
-      data: updatedClass.value,
-    });
   } catch (error) {
-    // Handle errors
-    res.status(500).json({ message: 'Error updating class', error });
+    res.status(500).send({ message: 'Failed to update class', error });
   }
 });
 
-    
+  
+ 
+
+
+
 
 //get all classes public route
     app.get('/allClasses',async(req,res)=>{
