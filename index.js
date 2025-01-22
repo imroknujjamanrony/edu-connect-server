@@ -16,27 +16,41 @@ const corsOptions = {
   origin: 'http://localhost:5173',
   credentials: true,
   optionSuccessStatus: 200,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], 
 };
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan('dev'));
 
-// JWT Verification Middleware
+
+//
+//verifyToken
 const verifyToken = (req, res, next) => {
-  const token = req.cookies?.token;
-  if (!token) {
-    return res.status(401).send({ message: 'Unauthorized access' });
-  }
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) {
-      console.log(err);
+  
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      // console.log("Missing Authorization Header");
       return res.status(401).send({ message: 'Unauthorized access' });
     }
-    req.user = decoded;
-    next();
-  });
-};
+  
+    const token = authHeader.split(' ')[1];
+    // console.log('Extracted Token:', token);
+  
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+      if (err) {
+        // console.error("JWT Verification Error:", err);
+        return res.status(401).send({ message: 'Unauthorized access' });
+      }
+  
+      req.decoded = decoded;
+      next();
+    });
+  };
+  
+
 
 // MongoDB Connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hvkkh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -55,7 +69,21 @@ async function run() {
     const userCollection=db.collection('users')
     const classesCollection=db.collection('classes')
     
+    //verifyAdmin
+    const verifyAdmin=async(req,res,next)=>{
+      const email=req.decoded.email;
+      const query={email:email};
+      const user=await userCollection.findOne(query);
+      const isAdmin=user?.role === 'admin';
+      if(!isAdmin){
+        return res.status(401).send({message: 'forbidden access'})
+      }
+      next();
+    }
     
+
+
+
     //save a user 
     app.post('/users/:email',async(req,res)=>{
       const email=req.params.email
@@ -72,13 +100,51 @@ async function run() {
       res.send(result)
     })
 
-   
+ 
 
     // Get all the users
-app.get('/users', async (req, res) => {
+  app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
   const result = await userCollection.find().toArray();
   res.send(result);
 });
+
+//get profile user
+// Get user data by email
+app.get('/user', verifyToken, async (req, res) => {
+  try {
+    const email = req.decoded.email; // Extract email from the verified token
+    const query = { email: email };
+    
+    const user = await userCollection.findOne(query); // Find user by email
+    
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    res.send(user); // Send user data as response
+  } catch (error) {
+    console.error('Error retrieving user data:', error);
+    res.status(500).send({ message: 'Internal server error' });
+  }
+});
+
+
+//admin verify route
+  app.get('/users/admin/:email',verifyToken, async (req, res) => {
+  const email=req.params.email;
+  if(email !== req.decoded.email){
+    return res.status(403).send({message: "unauthorized access"})
+  }
+  const query={email:email};
+  const user=await userCollection.findOne(query);
+  let admin=false;
+  if(email){
+    admin = user.role === 'admin';
+  }
+  res.send({admin});
+});
+
+
 
 // Search users by username or email
 app.get('/users/search', async (req, res) => {
@@ -93,7 +159,7 @@ app.get('/users/search', async (req, res) => {
 });
 
 // Make a user admin
-app.patch('/users/admin/:id', async (req, res) => {
+app.patch('/users/admin/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
@@ -104,7 +170,7 @@ app.patch('/users/admin/:id', async (req, res) => {
 });
 
 // Delete a user
-app.delete('/users/:id', async (req, res) => {
+app.delete('/users/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
   const result = await userCollection.deleteOne(query);
@@ -112,7 +178,7 @@ app.delete('/users/:id', async (req, res) => {
 });
 
 
-
+//
     //send classes to db
     app.post('/class',async(req,res)=>{
       const classs=req.body
@@ -121,7 +187,7 @@ app.delete('/users/:id', async (req, res) => {
     })
 
     //get My all classes
-    app.get('/myClasses',async(req,res)=>{
+    app.get('/myClasses',verifyToken,async(req,res)=>{
      
       const result=await classesCollection.find().toArray()
       res.send(result)
@@ -144,7 +210,7 @@ app.delete('/users/:id', async (req, res) => {
 
 
 // Update a specific class by ID
-app.put('/class/:id', async (req, res) => {
+app.put('/class/:id',verifyToken, async (req, res) => {
   const { id } = req.params;
   const updatedClassData = req.body;
 
@@ -199,37 +265,70 @@ app.put('/class/:id', async (req, res) => {
 
 
     // JWT Token Creation
-    app.post('/jwt', async (req, res) => {
-      try {
-        const { email } = req.body;
-        if (!email) {
-          return res.status(400).send({ message: 'Email is required' });
-        }
-        const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
-          expiresIn: '365d',
-        });
-        res.cookie('token', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-        }).send({ success: true });
-      } catch (error) {
-        res.status(500).send({ message: 'Internal server error' });
-      }
+    // app.post('/jwt', async (req, res) => {
+    //   try {
+    //     const { email } = req.body;
+    //     if (!email) {
+    //       return res.status(400).send({ message: 'Email is required' });
+    //     }
+    //     const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
+    //       expiresIn: '365d',
+    //     });
+    //     res.cookie('token', token, {
+    //       httpOnly: true,
+    //       secure: process.env.NODE_ENV === 'production',
+    //       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    //     }).send({ success: true });
+    //   } catch (error) {
+    //     res.status(500).send({ message: 'Internal server error' });
+    //   }
+    // });
+
+    // JWT Token Creation
+app.post('/jwt', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).send({ message: 'Email is required' });
+    }
+
+    const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: '365d',
     });
 
+    res.send({ success: true, token }); // Send token in the response body
+  } catch (error) {
+    res.status(500).send({ message: 'Internal server error' });
+  }
+});
+
+
     // Logout
-    app.get('/logout', (req, res) => {
-      try {
-        res.clearCookie('token', {
-          maxAge: 0,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-        }).send({ success: true });
-      } catch (err) {
-        res.status(500).send(err);
-      }
-    });
+    // app.get('/logout', (req, res) => {
+    //   try {
+    //     res.clearCookie('token', {
+    //       maxAge: 0,
+    //       secure: process.env.NODE_ENV === 'production',
+    //       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    //     }).send({ success: true });
+    //   } catch (err) {
+    //     res.status(500).send(err);
+    //   }
+    // });
+
+    // Logout
+app.get('/logout', (req, res) => {
+  try {
+    res.clearCookie('token', {
+      maxAge: 0,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    }).send({ success: true });
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
 
     // Ping MongoDB
     await client.db('admin').command({ ping: 1 });
@@ -248,3 +347,8 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`EduConnect is running on port ${port}`);
 });
+
+
+
+
+
