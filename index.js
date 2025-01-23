@@ -173,42 +173,6 @@ app.patch('/users/admin/:id',verifyToken,verifyAdmin, async (req, res) => {
 });
 
 
-// set approve and reject
-//     app.patch("/classes/:id", verifyToken, async (req, res) => {
-//       const id = req.params.id;
-//       // console.log(id);
-//       const filter = { _id: new ObjectId(id) };
-//       const updatedDoc = {
-//         $set: {
-//           status: "approve",
-//         },
-//       };
-//       const result = await classCollectionTeacher.updateOne(filter, updatedDoc);
-//       res.send(result);
-//     });
-//     // ret reject
-//     app.patch(
-//       "/classes/reject/:id",
-//       verifyToken,
-//       verifyAdmin,
-//       async (req, res) => {
-//         const id = req.params.id;
-//         // console.log(id);
-//         const filter = { _id: new ObjectId(id) };
-//         const updatedDocR = {
-//           $set: {
-//             status: "rejected",
-//           },
-//         };
-//         const result = await classCollectionTeacher.updateOne(
-//           filter,
-//           updatedDocR
-//         );
-//         res.send(result);
-//       }
-//     );
-
-
 
 
 
@@ -218,7 +182,7 @@ app.patch('/allClasses/approve/:id', async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
-    $set: { status: 'approve' }
+    $set: { status: 'approved' }
   };
   const result = await classesCollection.updateOne(filter, updateDoc);
   res.send(result);
@@ -246,6 +210,15 @@ app.delete('/users/:id',verifyToken,verifyAdmin, async (req, res) => {
   const result = await userCollection.deleteOne(query);
   res.send(result);
 });
+
+
+// send teacher-req on db 
+app.post('/teacher-req',verifyToken,async(req,res)=>{
+  const data=req.body
+  const result=await teacherReqCollection.insertOne({...data,status:'pending'})
+  res.send(result)
+})
+
 
 
 //
@@ -587,11 +560,7 @@ app.listen(port, () => {
 //     });
 
 //     // teacher's req related api's
-//     app.post("/teacher-req", verifyToken, async (req, res) => {
-//       const data = req.body;
-//       const result = await teacherReqCollection.insertOne(data);
-//       res.send(result);
-//     });
+//  
 //     // make a teacher api
 //     app.patch("/teacher-req/teacher/:id", verifyToken, async (req, res) => {
 //       const id = req.params.id;
