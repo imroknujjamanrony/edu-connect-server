@@ -1,5 +1,5 @@
-
 require('dotenv').config();
+const stripe =new require("stripe")(process.env.STRIPE_SECRET_KEY);
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -49,6 +49,40 @@ const verifyToken = (req, res, next) => {
       next();
     });
   };
+
+      // JWT Token Creation
+app.post('/jwt', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).send({ message: 'Email is required' });
+    }
+
+    const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: '365d',
+    });
+
+    res.send({ success: true, token }); // Send token in the response body
+  } catch (error) {
+    res.status(500).send({ message: 'Internal server error' });
+  }
+});
+
+
+ 
+    // Logout
+app.get('/logout', (req, res) => {
+  try {
+    res.clearCookie('token', {
+      maxAge: 0,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    }).send({ success: true });
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
   
 
 
@@ -219,7 +253,39 @@ app.post('/teacher-req',verifyToken,async(req,res)=>{
   res.send(result)
 })
 
+//get all the teacher req
+app.get("/teacher-req",verifyToken,  async (req, res) => {
+        const result = await teacherReqCollection.find().toArray();
+        res.send(result);
+      });
 
+
+//
+
+
+app.patch('/teacher-req/approve/:id',verifyToken, async (req, res) => {
+  const id = req.params.id;
+  const filter = { _id: new ObjectId(id) };
+  const updateDoc = {
+    $set: { status: 'approved' }
+  };
+  const result = await teacherReqCollection.updateOne(filter, updateDoc);
+  res.send(result);
+});
+
+// reject class/
+app.patch('/teacher-req/rejected/:id', async (req, res) => {
+  const id = req.params.id;
+  const filter = { _id: new ObjectId(id) };
+  const updateDoc = {
+    $set: { status: 'rejected' }
+  };
+  const result = await teacherReqCollection.updateOne(filter, updateDoc);
+  res.send(result);
+});
+
+
+      
 
 //
     //send classes to db
@@ -274,10 +340,6 @@ app.put('/class/:id',verifyToken, async (req, res) => {
 });
 
   
- 
-
-
-
 
 //get all classes public route
     app.get('/allClasses',async(req,res)=>{
@@ -304,41 +366,70 @@ app.put('/class/:id',verifyToken, async (req, res) => {
     
 
 
+//payment system/
 
+    app.post("/create-payment-intent/:id", async (req, res) => {
+      try {
+        const { price } = req.body; // Get price from request body
+        const id = req.params.id; // Get class ID from URL params
+        const query = { _id: new ObjectId(id) };
 
+        const TeacherClass = await classesCollection.findOne(query);
+        if (!TeacherClass) {
+          return res.status(404).send({ error: "Class not found" });
+        }
+        const amount = parseInt(price * 100);
+        // console.log(amount, "amount inside the intent");
 
-    // JWT Token Creation
-app.post('/jwt', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).send({ message: 'Email is required' });
-    }
-
-    const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: '365d',
+        // Create the payment intent
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        const updatedDoc = {
+          $set: {
+            enroll: (TeacherClass.enroll || 0) + 1, // If enroll doesn't exist, start from 0
+          },
+        };
+        const updRes = await classesCollection.updateOne(
+          query,
+          updatedDoc
+        );
+        if (updRes.modifiedCount === 0) {
+          return res
+            .status(500)
+            .send({ error: "Failed to update enrollment count" });
+        }
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        // console.error("Error in /create-payment-intent:", error);
+        res.status(500).send({ error: "Internal server error" });
+      }
     });
 
-    res.send({ success: true, token }); // Send token in the response body
-  } catch (error) {
-    res.status(500).send({ message: 'Internal server error' });
-  }
-});
+//send money to database
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const payResult = await paymentsCollection.insertOne(payment);
+      // console.log("payment info", payment);
+      res.send(payResult);
+    });
+
+    // get my enroll data from payments collection 
+    app.get('/my-enrolled-class', async (req, res) => {
+      const result=await paymentsCollection.find().toArray()
+      res.send(result)
+    });
+
+    
 
 
- 
-    // Logout
-app.get('/logout', (req, res) => {
-  try {
-    res.clearCookie('token', {
-      maxAge: 0,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-    }).send({ success: true });
-  } catch (err) {
-    res.status(500).send(err);
-  }
-});
+
+
+
 
 
     // Ping MongoDB
@@ -368,328 +459,6 @@ app.listen(port, () => {
 
 
 
-
-
-
-
-
-
-//
-
-
-// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
-
-
-// //
-
-
-// //
-// async function run() {
-//   try {
-//     // Connect the client to the server	(optional starting in v4.7)
-//     // await client.connect();
-
-  
-
-  
-
-//     // middlewares
-   
-   
-//     // get all the classes API
-//     app.get("/classes", async (req, res) => {
-//       const result = await classCollectionTeacher.find().toArray();
-//       res.send(result);
-//     });
-//     // post class by teachers
-//     app.post("/classes", verifyToken, async (req, res) => {
-//       const classes = req.body;
-//       const result = await classCollectionTeacher.insertOne(classes);
-//       res.send(result);
-//     });
-
-//     // set approve and reject
-//     app.patch("/classes/:id", verifyToken, async (req, res) => {
-//       const id = req.params.id;
-//       // console.log(id);
-//       const filter = { _id: new ObjectId(id) };
-//       const updatedDoc = {
-//         $set: {
-//           status: "approve",
-//         },
-//       };
-//       const result = await classCollectionTeacher.updateOne(filter, updatedDoc);
-//       res.send(result);
-//     });
-//     // ret reject
-//     app.patch(
-//       "/classes/reject/:id",
-//       verifyToken,
-//       verifyAdmin,
-//       async (req, res) => {
-//         const id = req.params.id;
-//         // console.log(id);
-//         const filter = { _id: new ObjectId(id) };
-//         const updatedDocR = {
-//           $set: {
-//             status: "rejected",
-//           },
-//         };
-//         const result = await classCollectionTeacher.updateOne(
-//           filter,
-//           updatedDocR
-//         );
-//         res.send(result);
-//       }
-//     );
-//     // select a specific class by id
-//     app.get("/classes/:id", async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await classCollectionTeacher.findOne(query);
-//       res.send(result);
-//       // console.log(id);
-//     });
-//     app.get("/classes/teacher/:email", async (req, res) => {
-//       const email = req.params.email;
-//       const query = { email: email };
-//       const result = await classCollectionTeacher.find(query).toArray();
-//       res.send(result);
-//       console.log(email);
-//     });
-//     // update the added class by a teacher
-//     app.put("/classes/:id", async (req, res) => {
-//       const id = req.params.id;
-//       const filter = { _id: new ObjectId(id) };
-//       const options = { upsert: true };
-//       const updateClass = req.body;
-//       const updatedDoc = {
-//         $set: {
-//           image: updateClass.image,
-//           price: updateClass.price,
-//           title: updateClass.title,
-//           description: updateClass.description,
-//         },
-//       };
-//       // console.log(updatedDoc);
-//       const result = await classCollectionTeacher.updateOne(
-//         filter,
-//         updatedDoc,
-//         options
-//       );
-//       res.send(result);
-//     });
-
-//     // users related api
-//     // check the admin role
-//     app.get("/users/admin/:email", async (req, res) => {
-//       // get admin
-//       const email = req.params.email;
-//       // if (email !== req.decoded.email) {
-//       //   return res.status(403).send({ message: "Forbidden access" });
-//       // }
-//       const query = { email: email };
-//       const user = await usersCollection.findOne(query);
-//       let admin = false;
-//       if (user) {
-//         admin = user.role === "admin";
-//       }
-//       res.send({ admin });
-//     });
-//     // check the teacher's role
-//     app.get("/teacher-req/teacher/:email", async (req, res) => {
-//       // get teacher
-//       const email = req.params.email;
-//       // if (email !== req.decoded.email) {
-//       //   return res.status(403).send({ message: "Forbidden access" });
-//       // }
-//       const query = { email: email };
-//       const user = await teacherReqCollection.findOne(query);
-//       let teacher = false;
-//       if (user) {
-//         teacher = user.role === "teacher";
-//       }
-//       res.send({ teacher });
-//     });
-
-//     app.post("/users", async (req, res) => {
-//       const user = req.body;
-//       //   if user doesn't exits
-//       const query = { email: user?.email };
-//       const existingUser = await usersCollection.findOne(query);
-//       if (existingUser) {
-//         return res.send({ message: "user already exists", insertedId: null });
-//       }
-//       const result = await usersCollection.insertOne(user);
-//       res.send(result);
-//     });
-//     // get all users
-//     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-//       const result = await usersCollection.find().toArray();
-//       res.send(result);
-//     });
-//     app.get("/api/user-count", async (req, res) => {
-//       const count = await usersCollection.countDocuments();
-//       res.send({ count });
-//     });
-
-//     // make admin related api
-//     app.patch(
-//       "/users/admin/:id",
-//       verifyToken,
-//       verifyAdmin,
-//       async (req, res) => {
-//         const id = req.params.id;
-//         const filter = { _id: new ObjectId(id) };
-//         const updatedDoc = {
-//           $set: {
-//             role: "admin",
-//           },
-//         };
-//         const result = await usersCollection.updateOne(filter, updatedDoc);
-//         res.send(result);
-//       }
-//     );
-//     // delete an user by id
-//     app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await usersCollection.deleteOne(query);
-//       res.send(result);
-//     });
-
-//     // teacher's req related api's
-//  
-//     // make a teacher api
-//     app.patch("/teacher-req/teacher/:id", verifyToken, async (req, res) => {
-//       const id = req.params.id;
-//       const filter = { _id: new ObjectId(id) };
-//       const updatedDoc = {
-//         $set: {
-//           role: "teacher",
-//         },
-//       };
-//       const result = await teacherReqCollection.updateOne(filter, updatedDoc);
-//       res.send(result);
-//     });
-
-//     app.get("/teacher-req", verifyToken, async (req, res) => {
-//       const result = await teacherReqCollection.find().toArray();
-//       res.send(result);
-//     });
-
-//     // payment related api
-//     // app.post("/create-payment-intent/:id", async (req, res) => {
-//     //   const { price } = req.body;
-//     //   const id = req.params.id;
-//     //   const query = { _id: new ObjectId(id) };
-//     //   const TeacherClass = await classCollectionTeacher.findOne(query);
-
-//     //   const amount = parseInt(price * 100);
-//     //   console.log(amount, "amount inside the intent");
-
-//     //   const paymentIntent = await stripe.paymentIntents.create({
-//     //     amount: amount,
-//     //     currency: "usd",
-//     //     payment_method_types: ["card"],
-//     //   });
-//     //   const updatedDoc = {
-//     //     $set: {
-//     //       enrollment: enrollment + 1,
-//     //     },
-//     //   };
-//     //   const updEnrRes = await classCollectionTeacher.updateOne(query,updatedDoc)
-//     //   res.send({
-//     //     clientSecret: paymentIntent.client_secret,
-//     //   });
-//     // });
-
-//     app.post("/create-payment-intent/:id", async (req, res) => {
-//       try {
-//         const { price } = req.body; // Get price from request body
-//         const id = req.params.id; // Get class ID from URL params
-//         const query = { _id: new ObjectId(id) };
-
-//         const TeacherClass = await classCollectionTeacher.findOne(query);
-//         if (!TeacherClass) {
-//           return res.status(404).send({ error: "Class not found" });
-//         }
-//         const amount = parseInt(price * 100);
-//         // console.log(amount, "amount inside the intent");
-
-//         // Create the payment intent
-//         const paymentIntent = await stripe.paymentIntents.create({
-//           amount: amount,
-//           currency: "usd",
-//           payment_method_types: ["card"],
-//         });
-//         const updatedDoc = {
-//           $set: {
-//             enroll: (TeacherClass.enroll || 0) + 1, // If enroll doesn't exist, start from 0
-//           },
-//         };
-//         const updRes = await classCollectionTeacher.updateOne(
-//           query,
-//           updatedDoc
-//         );
-//         if (updRes.modifiedCount === 0) {
-//           return res
-//             .status(500)
-//             .send({ error: "Failed to update enrollment count" });
-//         }
-//         res.send({
-//           clientSecret: paymentIntent.client_secret,
-//         });
-//       } catch (error) {
-//         // console.error("Error in /create-payment-intent:", error);
-//         res.status(500).send({ error: "Internal server error" });
-//       }
-//     });
-
-//     // payment
-//     app.post("/payments", verifyToken, async (req, res) => {
-//       const payment = req.body;
-//       const payResult = await paymentsCollection.insertOne(payment);
-//       // console.log("payment info", payment);
-//       res.send(payResult);
-//     });
-
-//     // get class inside the payment data
-//     app.get("/enrollments", verifyToken, async (req, res) => {
-//       const email = req.query.email;
-//       if (!email) {
-//         return res.status(400).send({ message: "Email is required" });
-//       }
-//       try {
-//         const enrollments = await paymentsCollection.find({ email }).toArray();
-//         res.send(enrollments);
-//       } catch (error) {
-//         res.status(500).send({ message: "Error fetching enrollments", error });
-//       }
-//     });
-
-//     // Send a ping to confirm a successful connection
-//     // await client.db("admin").command({ ping: 1 });
-//     // console.log(
-//     //   "Pinged your deployment. You successfully connected to MongoDB!"
-//     // );
-//   } finally {
-//     // Ensures that the client will close when you finish/error
-//     // await client.close();
-//   }
-// }
-// run().catch(console.dir);
-
-// // root path
-// app.get("/", (req, res) => {
-//   res.send("Teacher And Admin Is Going...");
-// });
-
-// app.listen(port, () => {
-//   console.log(Ed Manage Is Running On Port: ${port});
-// });
-// localhost
 
 
 
