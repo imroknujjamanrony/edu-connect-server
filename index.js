@@ -1,5 +1,5 @@
 require('dotenv').config();
-const stripe =new require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -13,7 +13,7 @@ const app = express();
 // Middleware
 const corsOptions = {
   // Adjust origins as needed
-  origin: 'http://localhost:5173',
+  origin: ['http://localhost:5173','https://educonnect-5a40e.firebaseapp.com','https://edu-connect-server-ebon.vercel.app','https://educonnect-5a40e.web.app'],
   credentials: true,
   optionSuccessStatus: 200,
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -26,7 +26,7 @@ app.use(cookieParser());
 app.use(morgan('dev'));
 
 
-//
+
 //verifyToken
 const verifyToken = (req, res, next) => {
   
@@ -68,7 +68,7 @@ app.post('/jwt', async (req, res) => {
   }
 });
 
-
+//
  
     // Logout
 app.get('/logout', (req, res) => {
@@ -235,7 +235,7 @@ app.patch('/allClasses/rejected/:id', async (req, res) => {
 
 
 
-
+//
 
 // Delete a user
 app.delete('/users/:id',verifyToken,verifyAdmin, async (req, res) => {
@@ -249,7 +249,7 @@ app.delete('/users/:id',verifyToken,verifyAdmin, async (req, res) => {
 // send teacher-req on db 
 app.post('/teacher-req',verifyToken,async(req,res)=>{
   const data=req.body
-  const result=await teacherReqCollection.insertOne({...data,status:'pending'})
+  const result=await teacherReqCollection.insertOne({...data,role:'pending'})
   res.send(result)
 })
 
@@ -260,34 +260,51 @@ app.get("/teacher-req",verifyToken,  async (req, res) => {
       });
 
 
-//
+
+// check the teacher's role for verify
+app.get("/teacher-req/teacher/:email", async (req, res) => {
+  // get teacher
+  const email = req.params.email;
+ 
+  const query = { email: email };
+  const user = await teacherReqCollection.findOne(query);
+  let teacher = false;
+  if (user) {
+    teacher = user.role === "teacher";
+  }
+  res.send({ teacher });
+});
 
 
 app.patch('/teacher-req/approve/:id',verifyToken, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
-    $set: { status: 'approved' }
+    $set: { role: 'teacher' }
   };
   const result = await teacherReqCollection.updateOne(filter, updateDoc);
   res.send(result);
 });
 
-// reject class/
+// reject class
 app.patch('/teacher-req/rejected/:id', async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
-    $set: { status: 'rejected' }
+    $set: { role: 'rejected' }
   };
   const result = await teacherReqCollection.updateOne(filter, updateDoc);
   res.send(result);
 });
 
 
-      
+// app.get("/teacher-req", verifyToken, async (req, res) => {
+//   const result = await teacherReqCollection.find().toArray();
+//   res.send(result);
+// });
 
-//
+
+ 
     //send classes to db
     app.post('/class',async(req,res)=>{
       const classs=req.body
@@ -296,11 +313,62 @@ app.patch('/teacher-req/rejected/:id', async (req, res) => {
     })
 
     //get My all classes teacher
-    app.get('/myClasses',verifyToken,async(req,res)=>{
+    app.get('/my-classes',verifyToken,async(req,res)=>{
      
       const result=await classesCollection.find().toArray()
       res.send(result)
     })
+//
+    //get single my class info
+    app.get('/my-classes/:id',async(req,res)=>{
+      const id=req.params.id
+      const query={_id: new ObjectId(id)}
+     const result=await classesCollection.findOne(query)
+      res.send(result)
+    })
+
+
+    // Set up a new route to handle assignment creation
+    app.patch("/my-classes/:id/assignments",verifyToken,  async (req, res) => {
+      const id = req.params.id;
+      const assignmentData = req.body; // Get assignment data from request body
+
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          assignments: assignmentData, // Store the assignment data
+        },
+      };
+
+      try {
+        const result = await classesCollection.updateOne(
+          filter,
+          updateDoc
+        );
+
+        if (result.modifiedCount === 0) {
+          throw new Error(
+            "No documents matched the query. Updated 0 documents."
+          );
+        }
+
+        res.status(200).json({
+          status: "success",
+          message: "Assignment updated successfully",
+          data: assignmentData,
+        });
+      } catch (error) {
+        console.error("Error updating assignment:", error);
+        res.status(500).json({
+          status: "error",
+          message: "An error occurred while updating the assignment",
+          error: error.message,
+        });
+      }
+    });
+
+   
+
 
     //delete class
     app.delete('/class/:id', async (req, res) => {
@@ -339,7 +407,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
   }
 });
 
-  
+ // 
 
 //get all classes public route
     app.get('/allClasses',async(req,res)=>{
@@ -424,6 +492,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
       res.send(result)
     });
 
+   
     
 
 
@@ -431,9 +500,8 @@ app.put('/class/:id',verifyToken, async (req, res) => {
 
 
 
-
     // Ping MongoDB
-    await client.db('admin').command({ ping: 1 });
+    // await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
   } finally {
     // Cleanup if needed
