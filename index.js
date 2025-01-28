@@ -68,7 +68,7 @@ app.post('/jwt', async (req, res) => {
   }
 });
 
-//
+
  
     // Logout
 app.get('/logout', (req, res) => {
@@ -119,7 +119,7 @@ async function run() {
     }
     
 
-//
+
 
     //save a user 
     app.post('/users/:email',async(req,res)=>{
@@ -130,6 +130,7 @@ async function run() {
       isExist=await userCollection.findOne(query)
       if(isExist){
         return res.send(isExist)
+        // return res.send({ message: "user already exists", insertedId: null });
       }
       const result=await userCollection.insertOne({...user,
         role: "Student",
@@ -145,6 +146,11 @@ async function run() {
   res.send(result);
 });
 
+//for stat
+app.get('/users-stat', async (req, res) => {
+  const result = await userCollection.find().toArray();
+  res.send(result);
+});
 
 // Get user data by email
 app.get('/user', verifyToken, async (req, res) => {
@@ -212,7 +218,7 @@ app.patch('/users/admin/:id',verifyToken,verifyAdmin, async (req, res) => {
 
 // Approve a class
 
-app.patch('/allClasses/approve/:id', async (req, res) => {
+app.patch('/allClasses/approve/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
@@ -223,7 +229,7 @@ app.patch('/allClasses/approve/:id', async (req, res) => {
 });
 
 // reject class/
-app.patch('/allClasses/rejected/:id', async (req, res) => {
+app.patch('/allClasses/rejected/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
@@ -254,7 +260,7 @@ app.post('/teacher-req',verifyToken,async(req,res)=>{
 })
 
 //get all the teacher req
-app.get("/teacher-req",verifyToken,  async (req, res) => {
+app.get("/teacher-req",verifyToken,verifyAdmin,  async (req, res) => {
         const result = await teacherReqCollection.find().toArray();
         res.send(result);
       });
@@ -262,7 +268,7 @@ app.get("/teacher-req",verifyToken,  async (req, res) => {
 
 
 // check the teacher's role for verify
-app.get("/teacher-req/teacher/:email", async (req, res) => {
+app.get("/teacher-req/teacher/:email",verifyToken, async (req, res) => {
   // get teacher
   const email = req.params.email;
  
@@ -276,7 +282,7 @@ app.get("/teacher-req/teacher/:email", async (req, res) => {
 });
 
 
-app.patch('/teacher-req/approve/:id',verifyToken, async (req, res) => {
+app.patch('/teacher-req/approve/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
@@ -286,8 +292,8 @@ app.patch('/teacher-req/approve/:id',verifyToken, async (req, res) => {
   res.send(result);
 });
 
-// reject class
-app.patch('/teacher-req/rejected/:id', async (req, res) => {
+// reject teacher req
+app.patch('/teacher-req/rejected/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
   const updateDoc = {
@@ -298,10 +304,6 @@ app.patch('/teacher-req/rejected/:id', async (req, res) => {
 });
 
 
-// app.get("/teacher-req", verifyToken, async (req, res) => {
-//   const result = await teacherReqCollection.find().toArray();
-//   res.send(result);
-// });
 
 
  
@@ -312,15 +314,31 @@ app.patch('/teacher-req/rejected/:id', async (req, res) => {
       res.send(result)
     })
 
-    //get My all classes teacher
+    // get My all classes teacher
     app.get('/my-classes',verifyToken,async(req,res)=>{
      
       const result=await classesCollection.find().toArray()
       res.send(result)
     })
-//
+
+//after added filter for my class
+
+// app.get('/my-classes/:email',verifyToken,  async (req, res) => {
+//   const userEmail = req.params.email; // Extract email from token
+
+//   try {
+//       const result = await classesCollection.find({ email: userEmail }).toArray();
+//       res.send(result);
+//   } catch (error) {
+//       res.status(500).send({ message: "Failed to fetch classes", error });
+//   }
+// });
+
+
+
+
     //get single my class info
-    app.get('/my-classes/:id',async(req,res)=>{
+    app.get('/my-classes/:id',verifyToken,async(req,res)=>{
       const id=req.params.id
       const query={_id: new ObjectId(id)}
      const result=await classesCollection.findOne(query)
@@ -371,7 +389,7 @@ app.patch('/teacher-req/rejected/:id', async (req, res) => {
 
 
     //delete class
-    app.delete('/class/:id', async (req, res) => {
+    app.delete('/class/:id',verifyToken, async (req, res) => {
       try {
         const { id } = req.params;
         const result = await classesCollection.deleteOne({ _id: new ObjectId(id) });
@@ -418,7 +436,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
 
 
     //get single class details by id
-    app.get('/class/:id', async (req, res) => {
+    app.get('/class/:id',verifyToken, async (req, res) => {
       const { id } = req.params;
       try {
         const result = await classesCollection.findOne({ _id: new ObjectId(id) });
@@ -434,7 +452,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
     
 
 
-//payment system/
+//payment system
 
     app.post("/create-payment-intent/:id", async (req, res) => {
       try {
@@ -487,7 +505,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
     });
 
     // get my enroll data from payments collection 
-    app.get('/my-enrolled-class', async (req, res) => {
+    app.get('/my-enrolled-class',verifyToken, async (req, res) => {
       const result=await paymentsCollection.find().toArray()
       res.send(result)
     });
