@@ -2,7 +2,7 @@ require('dotenv').config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const express = require('express');
 const cors = require('cors');
-const cookieParser = require('cookie-parser');
+// const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const morgan = require('morgan');
@@ -12,17 +12,18 @@ const app = express();
 
 // Middleware
 const corsOptions = {
-  // Adjust origins as needed
-  origin: ['http://localhost:5173','https://educonnect-5a40e.firebaseapp.com','https://edu-connect-server-ebon.vercel.app','https://educonnect-5a40e.web.app'],
-  credentials: true,
-  optionSuccessStatus: 200,
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE'], 
+  origin: ['http://localhost:5173','https://educonnect-5a40e.firebaseapp.com','https://educonnect-5a40e.web.app']
 };
+  // Adjust origins as needed
+
+// credentials: true,
+  // optionSuccessStatus: 200,
+  // allowedHeaders: ['Content-Type', 'Authorization'],
+  // methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE'], 
 
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use(cookieParser());
+// app.use(cookieParser());
 app.use(morgan('dev'));
 
 
@@ -138,7 +139,7 @@ async function run() {
       res.send(result)
     })
 
- 
+ //
 
     // Get all the users
   app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
@@ -315,24 +316,26 @@ app.patch('/teacher-req/rejected/:id',verifyToken,verifyAdmin, async (req, res) 
     })
 
     // get My all classes teacher
-    app.get('/my-classes',verifyToken,async(req,res)=>{
+    // app.get('/my-classes',verifyToken,async(req,res)=>{
      
-      const result=await classesCollection.find().toArray()
-      res.send(result)
-    })
+    //   const result=await classesCollection.find().toArray()
+    //   res.send(result)
+    // })
 
 //after added filter for my class
 
-// app.get('/my-classes/:email',verifyToken,  async (req, res) => {
-//   const userEmail = req.params.email; // Extract email from token
+app.get('/my-classes/:email', async (req, res) => {
+  const userEmail = req.params.email;
+  console.log('email:', userEmail);
+  
+  try {
+      const result = await classesCollection.find({ "publisher.email": userEmail }).toArray();
+      res.send(result);
+  } catch (error) {
+      res.status(500).send({ message: "Failed to fetch classes", error });
+  }
+});
 
-//   try {
-//       const result = await classesCollection.find({ email: userEmail }).toArray();
-//       res.send(result);
-//   } catch (error) {
-//       res.status(500).send({ message: "Failed to fetch classes", error });
-//   }
-// });
 
 
 
@@ -505,11 +508,23 @@ app.put('/class/:id',verifyToken, async (req, res) => {
     });
 
     // get my enroll data from payments collection 
-    app.get('/my-enrolled-class',verifyToken, async (req, res) => {
-      const result=await paymentsCollection.find().toArray()
-      res.send(result)
-    });
+    // app.get('/my-enrolled-class',verifyToken, async (req, res) => {
+    //   const result=await paymentsCollection.find().toArray()
+    //   res.send(result)
+    // });
 
+    //after only my enroll class by my email
+    app.get('/my-enrolled-class/:email',verifyToken, async (req, res) => {
+      const userEmail = req.params.email;
+      
+      try {
+          const result = await paymentsCollection.find({ "email": userEmail }).toArray();
+          res.send(result);
+      } catch (error) {
+          res.status(500).send({ message: "Failed to fetch classes", error });
+      }
+    });
+    
    
     
 
