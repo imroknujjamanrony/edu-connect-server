@@ -14,16 +14,10 @@ const app = express();
 const corsOptions = {
   origin: ['http://localhost:5173','https://educonnect-5a40e.firebaseapp.com','https://educonnect-5a40e.web.app']
 };
-  // Adjust origins as needed
-
-// credentials: true,
-  // optionSuccessStatus: 200,
-  // allowedHeaders: ['Content-Type', 'Authorization'],
-  // methods: ['GET', 'POST', 'PUT','PATCH', 'DELETE'], 
+ 
 
 app.use(cors(corsOptions));
 app.use(express.json());
-// app.use(cookieParser());
 app.use(morgan('dev'));
 
 
@@ -106,6 +100,7 @@ async function run() {
     const classesCollection=db.collection('classes');
     const teacherReqCollection=db.collection('teacher-req');
     const paymentsCollection=db.collection('payments')
+    const feedbackCollection=db.collection('feedback')
     
     //verifyAdmin
     const verifyAdmin=async(req,res,next)=>{
@@ -114,13 +109,23 @@ async function run() {
       const user=await userCollection.findOne(query);
       const isAdmin=user?.role === 'admin';
       if(!isAdmin){
-        return res.status(401).send({message: 'forbidden access'})
+        return res.status(403).send({message: 'forbidden access'})
       }
       next();
     }
     
 
-
+ // post feedback data
+ app.post("/feedback", async (req, res) => {
+  const feedback = req.body;
+  const result = await feedbackCollection.insertOne(feedback);
+  res.send(result);
+});
+// get feedback data
+app.get("/feedback", async (req, res) => {
+  const result = await feedbackCollection.find().toArray();
+  res.send(result);
+});
 
     //save a user 
     app.post('/users/:email',async(req,res)=>{
@@ -315,13 +320,7 @@ app.patch('/teacher-req/rejected/:id',verifyToken,verifyAdmin, async (req, res) 
       res.send(result)
     })
 
-    // get My all classes teacher
-    // app.get('/my-classes',verifyToken,async(req,res)=>{
-     
-    //   const result=await classesCollection.find().toArray()
-    //   res.send(result)
-    // })
-
+  
 //after added filter for my class
 
 app.get('/my-classes/:email', async (req, res) => {
@@ -507,11 +506,7 @@ app.put('/class/:id',verifyToken, async (req, res) => {
       res.send(payResult);
     });
 
-    // get my enroll data from payments collection 
-    // app.get('/my-enrolled-class',verifyToken, async (req, res) => {
-    //   const result=await paymentsCollection.find().toArray()
-    //   res.send(result)
-    // });
+   
 
     //after only my enroll class by my email
     app.get('/my-enrolled-class/:email',verifyToken, async (req, res) => {
