@@ -12,6 +12,8 @@ const {
 const jwt = require("jsonwebtoken");
 const morgan = require("morgan");
 
+const generativeText = require("./utils/gemini");
+
 const port = process.env.PORT || 5000;
 const app = express();
 
@@ -118,16 +120,22 @@ async function run() {
     // Gemini API Endpoint
     app.post("/geminiBot", async (req, res) => {
       const { prompt } = req.body;
+      console.log("👉 Received prompt:", prompt);
       if (!prompt) {
         return res.status(400).json({ error: "Prompt is required" });
       }
 
       try {
+        console.log("💡 Calling Gemini with prompt:", prompt);
         const response = await generativeText(prompt);
         res.json({ response });
       } catch (error) {
         res.status(500).json({ error: "Failed to generate content" });
       }
+    });
+
+    app.get("/test-env", (req, res) => {
+      res.send({ key: process.env.GEMINI_API_KEY || "Not defined" });
     });
 
     // post feedback data
@@ -296,6 +304,12 @@ async function run() {
 
     //get all the teacher req
     app.get("/teacher-req", verifyToken, verifyAdmin, async (req, res) => {
+      const result = await teacherReqCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get all teacher req for public route
+    app.get("/all-teacher", async (req, res) => {
       const result = await teacherReqCollection.find().toArray();
       res.send(result);
     });

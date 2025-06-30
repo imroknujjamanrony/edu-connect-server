@@ -10,7 +10,7 @@ const generativeText = async (prompt) => {
     const text = await response.text();
     return text;
   } catch (error) {
-    console.error("Error generating text:", error);
+    console.error("💥 Error generating text:", error); // more helpful
     throw error;
   }
 };
